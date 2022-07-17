@@ -1,18 +1,16 @@
 library(dplyr)
-library(zoo)
-library(tidygraph)
 library(purrr)
 
 # the simulation
-seir_simulate <- function(input, nodes, edges) {
+seir_simulate <- function(n_days, param, nodes, edges) {
   
   out <- tibble(
-    S = rep(0, input$n_days),
-    E = rep(0, input$n_days),
-    I = rep(0, input$n_days),
-    R = rep(0, input$n_days),
-    daily_cases = rep(0, input$n_days), # (test positive)
-    daily_infs = rep(0, input$n_days)
+    S = rep(0, n_days),
+    E = rep(0, n_days),
+    I = rep(0, n_days),
+    R = rep(0, n_days),
+    daily_cases = rep(0, n_days), # (test positive)
+    daily_infs = rep(0, n_days)
   )
   mask_mandate <- F
   
@@ -26,14 +24,14 @@ seir_simulate <- function(input, nodes, edges) {
   )
   
   # community infection setup
-  if (input$community_p_inf == "MN Washington County") {
+  if (param$community_p_inf == "MN Washington County") {
     community_pr <- washington_data()
   } else {
-    community_pr <- rep(input$community_p_inf, input$n_days)
+    community_pr <- rep(param$community_p_inf, n_days)
   }
   
   # the days
-  for (d in 1:input$n_days) {
+  for (d in 1:n_days) {
     
     # introduce 1 new case (can change to one every week, etc)
     # can insert the community prevalence formula here
@@ -44,38 +42,38 @@ seir_simulate <- function(input, nodes, edges) {
     }
     
     # mask mandate
-    if (input$triggered_masks) {
-      if (input$trigger_var == 1) {
-        check_p <- rollsum(out$daily_cases, 7, align = "right", fill = 0)[d]/input$n_students
+    if (param$triggered_masks) {
+      if (param$trigger_var == 1) {
+        check_p <- rollsum(out$daily_cases, 7, align = "right", fill = 0)[d]/nrow(nodes)
       }
-      if (input$trigger_var == 2) {
-        check_p <- sum(nodes$quarantined)/input$n_students
+      if (param$trigger_var == 2) {
+        check_p <- sum(nodes$quarantined)/nrow(nodes)
       }
       # print(check_p)
-      mask_mandate <- check_p > input$trigger_p
+      mask_mandate <- check_p > param$trigger_p
     }
     
     ## stage transitions HERE
     
     # E -> Ip: Exposed students become infectious after latent period
-    E_to_Ip <- nodes$compartment == "E" & d >= nodes$day_exposed + input$d_latent
+    E_to_Ip <- nodes$compartment == "E" & d >= nodes$day_exposed + param$d_latent
     nodes$compartment[E_to_Ip] <- "Ip"
     
     # Ip -> Is/Ia: Some people start to develop symptoms after incubation period
     Ip_to_Isa <- 
-      nodes$compartment == "Ip" & d >= nodes$day_exposed + input$d_incubation
+      nodes$compartment == "Ip" & d >= nodes$day_exposed + param$d_incubation
     nodes$compartment[Ip_to_Isa] <- if_else(
-      runif(sum(Ip_to_Isa)) < input$p_asymp,
+      runif(sum(Ip_to_Isa)) < param$p_asymp,
       "Ia",
       "Is"
     )
     
     # Is/Ia -> R: Making students recover from COVID-19
-    Isa_to_R <- nodes$compartment != "S" & d >= nodes$day_exposed + input$d_incubation + nodes$days_contag
+    Isa_to_R <- nodes$compartment != "S" & d >= nodes$day_exposed + param$d_incubation + nodes$days_contag
     nodes$compartment[Isa_to_R] <- "R"
     
     # R -> S: Becoming susceptible again after recovery
-    R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + input$d_incubation + nodes$days_contag + input$d_immunity
+    R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + param$d_incubation + nodes$days_contag + param$d_immunity
     nodes$day_start_q[R_to_S] <- Inf
     nodes$compartment[R_to_S] <- "S"
     
@@ -93,25 +91,25 @@ seir_simulate <- function(input, nodes, edges) {
     feeling_sick <- !nodes$quarantined & nodes$compartment == "Is" & d < nodes$day_start_q
     nodes$day_start_q[feeling_sick] <- d
     
-    if (input$testing_plan == "Weekly antigen" && d %% 7 == 1) {
+    if (param$testing_plan == "Weekly antigen" && d %% 7 == 1) {
       tested_cases <- 
         !nodes$quarantined & 
         nodes$compartment %in% c("Ip", "Is", "Ia") & 
-        runif(input$n_students) < sens_ant
+        runif(nrow(nodes)) < sens_ant
       
       nodes$day_start_q[tested_cases] <- d
-    } else if (input$testing_plan == "Weekly PCR" && d %% 7 == 1) {
+    } else if (param$testing_plan == "Weekly PCR" && d %% 7 == 1) {
       tested_cases <- 
         !nodes$quarantined &
         nodes$compartment %in% c("Ip", "Is", "Ia") &
-        runif(input$n_students) < sens_pcr
+        runif(nrow(nodes)) < sens_pcr
       # One day turnaround
       nodes$day_start_q[tested_cases] <- d + 1
     } # else do nothing
     
     out$daily_cases[d] <- sum(d == nodes$day_start_q)
     nodes$quarantined[d == nodes$day_start_q] <- TRUE
-    nodes$quarantined[d == nodes$day_start_q + input$d_quarantine + 1] <- FALSE
+    nodes$quarantined[d == nodes$day_start_q + param$d_quarantine + 1] <- FALSE
     
     # S -> E this part is the actual transmission events, aka making S people into E
     if (d %% 7 %in% 1:5) {
@@ -134,7 +132,7 @@ seir_simulate <- function(input, nodes, edges) {
         mutate(
           true_p_inf = p_inf * (1 - eff_vax(nodes$vax[who_sus])) * ifelse(
             mask_mandate,
-            1 - eff_mask(input$mask_type),
+            1 - eff_mask(param$mask_type),
             if_else(
               type == "class",
               1 - eff_mask(nodes$mask[who_sus]),
@@ -157,7 +155,7 @@ seir_simulate <- function(input, nodes, edges) {
       # if weekend
       
       #TODO: add poiss
-      outside_infs <- nodes$compartment == "S" & runif(input$n_students) < community_pr[d]
+      outside_infs <- nodes$compartment == "S" & runif(nrow(nodes)) < community_pr[d]
       nodes$compartment[outside_infs] <- "E"
       nodes$day_exposed[outside_infs] <- d
       nodes$days_contag[outside_infs] <- get_d_contagious(sum(outside_infs))

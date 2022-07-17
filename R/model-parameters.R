@@ -1,3 +1,5 @@
+# Will be deleted soon, just for my own reference
+
 def_n_students <- 1800
 def_n_classes <- 80 # number of classrooms
 def_n_lunches <- 3 # lunches are unused so far
