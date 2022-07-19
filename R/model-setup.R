@@ -3,7 +3,7 @@ library(purrr)
 
 # setting up the simulation
 
-create_nodes <- function(n_students, n_lunches, n_classes, n_hours) {
+create_school_net <- function(n_students, n_lunches, n_classes, n_hours) {
   
   # giving the students hours
   nodes <- map_dfc(
@@ -21,24 +21,7 @@ create_nodes <- function(n_students, n_lunches, n_classes, n_hours) {
     n_students
   )
   
-  # masks and vaccination
-  # nodes$mask <- "none"
-  # nodes$mask[sample(
-  #   1:n_students, 
-  #   p_masked * n_students
-  # )] <- mask_type
-  # 
-  # nodes$vax <- "two doses"
-  # nodes$vax[sample(
-  #   1:n_students, 
-  #   p_boosted * n_students
-  # )] <- "booster"
-  
-  return(nodes) 
-}
-
-create_edges <- function(n_students, n_lunches, n_classes, n_hours, nodes) { 
-  print("Creating network...")
+  # finished nodes, now edges
   
   # edges between all students who share a class
   edges_class <- map_dfr(
@@ -66,8 +49,7 @@ create_edges <- function(n_students, n_lunches, n_classes, n_hours, nodes) {
   edges_lunch$type <-  "lunch"
   # edges_lunch$p_inf <- p_inf_lunch
   
-  print("Creating network... success!")
+  edges <- bind_rows(edges_class, edges_lunch)
   
-  E <- bind_rows(edges_class, edges_lunch)
-  return(E)
+  return(list(nodes = nodes, edges = edges))
 }
