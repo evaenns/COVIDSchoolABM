@@ -70,7 +70,7 @@ sim_agents <- function(nodes, edges, params, interv) {
     # introduce 1 new case (can change to one every week, etc)
     # can insert the community prevalence formula here
     if (d == 1) {
-      inf_student <- sample(which(nodes$compartment == "S"), 1)
+      inf_student <- sample(which(nodes$compartment == "S"), params$I_0)
       nodes$compartment[inf_student] <- "E"
       nodes$day_exposed[inf_student] <- d
     }
@@ -143,7 +143,7 @@ sim_agents <- function(nodes, edges, params, interv) {
     
     out$daily_cases[d] <- sum(d == nodes$day_start_q)
     nodes$quarantined[d == nodes$day_start_q] <- TRUE
-    nodes$quarantined[d == nodes$day_start_q + params$d_quarantine + 1] <- FALSE
+    nodes$quarantined[d == nodes$day_start_q + interv$d_quarantine + 1] <- FALSE
     
     # S -> E this part is the actual transmission events, aka making S people into E
     if (d %% 7 %in% (2:6 - params$start_day)) {
