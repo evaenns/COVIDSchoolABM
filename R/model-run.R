@@ -139,7 +139,7 @@ sim_agents <- function(nodes, edges, params, interv) {
     nodes$quarantined[d == nodes$day_start_q + interv$d_quarantine + 1] <- FALSE
     
     # S -> E this part is the actual transmission events, aka making S people into E
-    if (d %% 7 %in% (2:6 - params$start_day)) {
+    if (d %% 7 %in% ((2:6 - params$start_day) %% 7) ) {
       # if weekday
       edges_inf <- edges %>%
         filter(
