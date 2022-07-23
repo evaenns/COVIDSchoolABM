@@ -10,16 +10,11 @@ run_sims <- function(school_net, n_sims, params, interv, print_msgs = F) {
   
   vec_mask <- rep(interv$eff_mask, nrow(nodes) * interv$p_mask)
   nodes$eff_mask <- c(vec_mask, rep(0, nrow(nodes) - length(vec_mask)))
+  
   vec_vax <- rep(interv$eff_vax, nrow(nodes) * interv$p_vax)
   nodes$eff_vax <- c(vec_vax, rep(0, nrow(nodes) - length(vec_vax)))
 
   edges <- school_net$edges
-  edges$p_inf <- case_when(
-    # class times
-    edges$type == "class" ~ 1 - exp(-params$rate_inf * 1),
-    edges$type == "lunch" ~ 1 - exp(-params$rate_inf * 1/3),
-    TRUE ~ Inf
-  )
 
   sim_results <- list()
   
@@ -29,8 +24,6 @@ run_sims <- function(school_net, n_sims, params, interv, print_msgs = F) {
     
     if (print_msgs) print(paste0("Simulation #", sim))
   }
-  
-  
   
   return(sim_results)
 }
@@ -164,20 +157,18 @@ sim_agents <- function(nodes, edges, params, interv) {
           )
         ) %>%
         mutate(
-          true_p_inf = p_inf * (1 - nodes$eff_vax[who_sus]) * ifelse(
-            mask_mandate,
-            1 - interv$trigger_eff,
-            if_else(
-              type == "class",
-              1 - nodes$eff_mask[who_sus],
-              1
-            )
-          )
+          sus_rate_inf = params$rate_inf * (1 - nodes$eff_vax[who_sus]) *
+            ifelse(
+              mask_mandate,
+              1 - interv$trigger_eff,
+              if_else(type == "class", 1 - nodes$eff_mask[who_sus], 1)
+            ),
+          p_inf = 1 - exp(-sus_rate_inf * case_when(type == "class" ~ 1, type == "lunch" ~ 0.5) )
         )
       
       edges_inf <- edges_inf %>% 
         filter(
-          runif(nrow(edges_inf)) < true_p_inf
+          runif(nrow(edges_inf)) < p_inf
         )
       
       new_infs <- unique(edges_inf$who_sus)
