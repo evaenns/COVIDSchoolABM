@@ -179,7 +179,6 @@ sim_agents <- function(nodes, edges, params, interv) {
     } else {
       # if weekend
       
-      #TODO: add poiss
       outside_infs <- nodes$compartment == "S" & runif(nrow(nodes)) < community_pr[d]
       nodes$compartment[outside_infs] <- "E"
       nodes$day_exposed[outside_infs] <- d
@@ -202,7 +201,7 @@ washington_data <- function() {
   
   # 7 day avg daily cases
   # 600 is september 1st
-  case_data <- (case_data[600:689]-case_data[593:682])/7
+  case_data <- (case_data[600:789]-case_data[593:782])/7
   
   # proportion of washington population
   # 2020 census
