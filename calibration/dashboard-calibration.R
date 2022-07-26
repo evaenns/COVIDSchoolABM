@@ -72,7 +72,7 @@ for (k in 1:6) {
   
   SE <- (erhs_simulated - erhs_observed)^2
   WSE <- (SE * c(17,6,7,7,7,7,7,7,7,7))/79
-  results$WMSE[k] <- mean(WSE)
+  results$WMSE[k] <- sum(WSE)
   results$total_cases[k] <- sum(avg)
   
   
