@@ -7,7 +7,7 @@ source("R/model-setup.R")
 erhs_net <- create_school_net(
   n_students = 1954,
   n_lunches = 3,
-  n_classes = 79,
+  n_classes = 78,
   n_hours = 6
 )
 
@@ -18,7 +18,7 @@ params <- list(
   d_incubation = 6,
   d_immunity = 365, 
   p_asymp = 0.405, 
-  n_days = 150,
+  n_days = 79,
   start_day = 3,
   rate_inf = 0.0012,
   community_p_inf = "MN Washington County",
@@ -45,7 +45,7 @@ results <- tibble(
   MSE = rep(0,6),
   total_cases = rep(0,6)
 )
-load("data/sowashco-dashboard.RData")
+sowashco_dashboard <- readRDS("data/sowashco-dashboard.rds")
   
 erhs_observed <- sowashco_dashboard$high[1:10] * 1954 / (1954 + 1972 + 1975)
   
@@ -53,7 +53,7 @@ for (k in 1:6) {
   params$rate_inf <- results$rates[k]
   
   sims <- run_sims(erhs_net, 50, params, interv, print_msgs = T)
-  save(sims, file = paste0("calibration/erhs-rate-", params$rate_inf, ".RData"))
+  saveRDS(sims, file = paste0("calibration/erhs-rate-", params$rate_inf, ".rds"))
   
   avg <- rowMeans(sapply(sims, function(x){x$daily_cases}))
   
