@@ -42,7 +42,7 @@ interv <- list(
 
 results <- tibble(
   rates = c(0.0000, 0.0010, 0.0011, 0.0012, 0.0013, 0.0014),
-  MSE = rep(0,6),
+  WMSE = rep(0,6),
   total_cases = rep(0,6)
 )
 sowashco_dashboard <- readRDS("data/sowashco-dashboard.rds")
