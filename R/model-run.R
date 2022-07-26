@@ -201,7 +201,7 @@ washington_data <- function() {
   
   # 7 day avg daily cases
   # 600 is september 1st
-  case_data <- (case_data[600:789]-case_data[593:782])/7
+  case_data <- (case_data[600:813]-case_data[593:806])/7
   
   # proportion of washington population
   # 2020 census
