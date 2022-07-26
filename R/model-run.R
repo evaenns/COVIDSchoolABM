@@ -96,20 +96,13 @@ sim_agents <- function(nodes, edges, params, interv) {
     )
     
     # Is/Ia -> R: Making students recover from COVID-19
-    Isa_to_R <- nodes$compartment != "S" & d >= nodes$day_exposed + params$d_incubation + nodes$d_contag
+    Isa_to_R <- nodes$compartment %in% c("Is", "Ia") & d >= nodes$day_exposed + params$d_incubation + nodes$d_contag
     nodes$compartment[Isa_to_R] <- "R"
     
     # R -> S: Becoming susceptible again after recovery
     R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + params$d_incubation + nodes$d_contag + params$d_immunity
     nodes$day_start_q[R_to_S] <- Inf
     nodes$compartment[R_to_S] <- "S"
-    
-    # regular testing
-    # ASSUMPTION: every symptomatic person quarantines
-    # tested_ids <- sample(which(!students$quarantined), 0 * sum(!students$quarantined))
-    # students$quarantined[tested_ids] <- 
-    #   substr(students$compartment[tested_ids], 1, 1) == "I" & 
-    #   runif(length(tested_ids)) < 0.99 #sensitivity
     
     # entering/exiting quarantine
     # here we instantly enter quarantine and count a case
