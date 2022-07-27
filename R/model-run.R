@@ -37,7 +37,8 @@ sim_agents <- function(nodes, edges, params, interv) {
     I = rep(0, params$n_days),
     R = rep(0, params$n_days),
     daily_cases = rep(0, params$n_days), # (test positive)
-    daily_infs = rep(0, params$n_days)
+    daily_infs = rep(0, params$n_days),
+    learning_lost = rep(0, params$n_days)
   )
   mask_mandate <- F
   
@@ -182,6 +183,7 @@ sim_agents <- function(nodes, edges, params, interv) {
     for (comp in c("S", "E", "I", "R")) {
       out[d, comp] <- sum(substr(nodes$compartment, 1, 1) == comp)
     }
+    out$learning_lost[d] <- sum(nodes$quarantined)
     
     # end of day loop
   }
