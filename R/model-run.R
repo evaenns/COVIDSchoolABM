@@ -2,18 +2,17 @@ library(dplyr)
 library(purrr)
 
 # params is the list of interventions, plus number of days and infection probability
-# 
 
 run_sims <- function(school_net, n_sims, params, interv, print_msgs = F) {
   # masks and vaccination
   nodes <- school_net$nodes
   
-  vec_mask <- rep(interv$eff_mask, nrow(nodes) * interv$p_mask)
-  nodes$eff_mask <- c(vec_mask, rep(0, nrow(nodes) - length(vec_mask)))
+  nodes$mask <- F
+  nodes$mask[sample(1:nrow(nodes), interv$p_mask * nrow(nodes))] <- T
   
-  vec_vax <- rep(interv$eff_vax, nrow(nodes) * interv$p_vax)
-  nodes$eff_vax <- c(vec_vax, rep(0, nrow(nodes) - length(vec_vax)))
-
+  nodes$vax <- F
+  nodes$vax[sample(1:nrow(nodes), interv$p_vax * nrow(nodes))] <- T
+  
   edges <- school_net$edges
 
   sim_results <- list()
@@ -40,14 +39,14 @@ sim_agents <- function(nodes, edges, params, interv) {
     daily_infs = rep(0, params$n_days),
     learning_lost = rep(0, params$n_days)
   )
-  mask_mandate <- F
   
   # initialize each student to be healthy and non quarantined
   nodes <- nodes %>% mutate(
     compartment = "S",
     quarantined = F,
     day_exposed = Inf,
-    day_start_q = Inf,
+    q_start = Inf,
+    q_end = Inf,
     d_contag = 0
   )
   
@@ -67,18 +66,6 @@ sim_agents <- function(nodes, edges, params, interv) {
       inf_student <- sample(which(nodes$compartment == "S"), params$I_0)
       nodes$compartment[inf_student] <- "E"
       nodes$day_exposed[inf_student] <- d
-    }
-    
-    # mask mandate
-    if (interv$trigger_masks) {
-      if (interv$trigger_var == 1) {
-        check_p <- rollsum(out$daily_cases, 7, align = "right", fill = 0)[d]/nrow(nodes)
-      }
-      if (interv$trigger_var == 2) {
-        check_p <- sum(nodes$quarantined)/nrow(nodes)
-      }
-      # print(check_p)
-      mask_mandate <- check_p > interv$trigger_p
     }
     
     ## stage transitions HERE
@@ -102,35 +89,35 @@ sim_agents <- function(nodes, edges, params, interv) {
     
     # R -> S: Becoming susceptible again after recovery
     R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + params$d_incubation + nodes$d_contag + params$d_immunity
-    nodes$day_start_q[R_to_S] <- Inf
+    nodes$q_start[R_to_S] <- Inf
+    nodes$q_end[R_to_S] <- Inf
     nodes$compartment[R_to_S] <- "S"
     
     # entering/exiting quarantine
     # here we instantly enter quarantine and count a case
     # Here we assume that tests work perfectly
     # Here we use strictly greater than, based on CDC guidelines
-    feeling_sick <- !nodes$quarantined & nodes$compartment == "Is" & d < nodes$day_start_q
-    nodes$day_start_q[feeling_sick] <- d
+    feeling_sick <- !nodes$quarantined & nodes$compartment == "Is" & d < nodes$q_start
+    nodes$q_start[feeling_sick] <- d
+    nodes$q_end[feeling_sick] <- d + interv$d_quarantine + 1
     
-    if (interv$testing_plan == "Weekly antigen" && d %% 7 == 1) {
-      tested_cases <- 
+    if (d %% interv$test_period == 1) {
+      tp <- 
         !nodes$quarantined & 
         nodes$compartment %in% c("Ip", "Is", "Ia") & 
-        runif(nrow(nodes)) < sens_ant
-      
-      nodes$day_start_q[tested_cases] <- d
-    } else if (interv$testing_plan == "Weekly PCR" && d %% 7 == 1) {
-      tested_cases <- 
-        !nodes$quarantined &
-        nodes$compartment %in% c("Ip", "Is", "Ia") &
-        runif(nrow(nodes)) < sens_pcr
-      # One day turnaround
-      nodes$day_start_q[tested_cases] <- d + 1
-    } # else do nothing
+        runif(nrow(nodes)) < params$test_sens
+      fp <- 
+        !nodes$quarantined & 
+        nodes$compartment %in% c("S", "E") & 
+        runif(nrow(nodes)) < 1 - params$test_spec
+
+      nodes$q_start[tp | fp] <- d + params$test_delay
+      nodes$q_end[tp | fp] <- d + interv$d_quarantine + 1
+    }
     
-    out$daily_cases[d] <- sum(d == nodes$day_start_q)
-    nodes$quarantined[d == nodes$day_start_q] <- TRUE
-    nodes$quarantined[d == nodes$day_start_q + interv$d_quarantine + 1] <- FALSE
+    out$daily_cases[d] <- sum(d == nodes$q_start)
+    nodes$quarantined[d == nodes$q_start] <- TRUE
+    nodes$quarantined[d == nodes$q_end] <- FALSE
     
     # S -> E this part is the actual transmission events, aka making S people into E
     if (d %% 7 %in% ((2:6 - params$start_day) %% 7) ) {
@@ -144,46 +131,50 @@ sim_agents <- function(nodes, edges, params, interv) {
           | nodes$compartment[to] %in% c("Ip", "Is", "Ia") & nodes$compartment[from] == "S"
         ) %>% 
         mutate(
-          who_sus = if_else(
+          who_S = if_else(
             nodes$compartment[to] == "S",
             to,
             from
-          )
-        ) %>%
-        mutate(
-          sus_rate_inf = params$rate_inf * (1 - nodes$eff_vax[who_sus]) *
-            ifelse(
-              mask_mandate,
-              1 - interv$trigger_eff,
-              if_else(type == "class", 1 - nodes$eff_mask[who_sus], 1)
-            ),
-          p_inf = 1 - exp(-sus_rate_inf * case_when(type == "class" ~ 1, type == "lunch" ~ 0.5) )
+          ),
+          who_I = if_else(
+            nodes$compartment[to] == "S",
+            from,
+            to
+          ),
+          true_rate_inf = params$rate_inf * 
+            (1 - params$eff_mask_S * nodes$mask[who_S] * (type != "lunch") ) *
+            (1 - params$eff_mask_I * nodes$mask[who_I] * (type != "lunch") ) *
+            (1 - params$eff_vax * nodes$vax[who_S]),
+          p_inf = 1 - exp(-true_rate_inf * case_when(type == "class" ~ 1, type == "lunch" ~ 1/3) )
         )
       
-      edges_inf <- edges_inf %>% 
-        filter(
-          runif(nrow(edges_inf)) < p_inf
-        )
+      edges_inf <- edges_inf %>% filter(runif(nrow(edges_inf)) < p_inf)
       
-      new_infs <- unique(edges_inf$who_sus)
+      new_infs <- unique(edges_inf$who_S)
       nodes$compartment[new_infs] <- "E"
       nodes$day_exposed[new_infs] <- d
       nodes$d_contag[new_infs] <- params$get_d_contag(length(new_infs))
       out$daily_infs[d] <- length(new_infs)
+      
+      out$learning_lost[d] <- sum(nodes$quarantined)
     } else {
       # if weekend
       
-      outside_infs <- nodes$compartment == "S" & runif(nrow(nodes)) < community_pr[d]
+      susceptibles <- which(nodes$compartment == "S")
+      outside_infs <- sample(susceptibles, round(length(susceptibles) * community_pr[d]))
+
       nodes$compartment[outside_infs] <- "E"
       nodes$day_exposed[outside_infs] <- d
-      nodes$d_contag[outside_infs] <- params$get_d_contag(sum(outside_infs))
+      nodes$d_contag[outside_infs] <- params$get_d_contag(length(outside_infs))
+      
+      out$learning_lost[d] <- 0
     }
     
     # recording data
     for (comp in c("S", "E", "I", "R")) {
       out[d, comp] <- sum(substr(nodes$compartment, 1, 1) == comp)
     }
-    out$learning_lost[d] <- sum(nodes$quarantined)
+    
     
     # end of day loop
   }
