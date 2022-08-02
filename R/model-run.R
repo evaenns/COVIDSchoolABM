@@ -29,7 +29,7 @@ run_sims <- function(school_net, n_sims, params, interv, print_msgs = F) {
 
 # a single trial of the simulation
 sim_agents <- function(nodes, edges, params, interv) {
-  
+
   out <- tibble(
     S = rep(0, params$n_days),
     E = rep(0, params$n_days),
@@ -46,7 +46,6 @@ sim_agents <- function(nodes, edges, params, interv) {
     quarantined = F,
     day_exposed = Inf,
     q_start = Inf,
-    q_end = Inf,
     d_contag = 0
   )
   
@@ -90,7 +89,6 @@ sim_agents <- function(nodes, edges, params, interv) {
     # R -> S: Becoming susceptible again after recovery
     R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + params$d_incubation + nodes$d_contag + params$d_immunity
     nodes$q_start[R_to_S] <- Inf
-    nodes$q_end[R_to_S] <- Inf
     nodes$compartment[R_to_S] <- "S"
     
     # entering/exiting quarantine
@@ -99,7 +97,12 @@ sim_agents <- function(nodes, edges, params, interv) {
     # Here we use strictly greater than, based on CDC guidelines
     feeling_sick <- !nodes$quarantined & nodes$compartment == "Is" & d < nodes$q_start
     nodes$q_start[feeling_sick] <- d
-    nodes$q_end[feeling_sick] <- d + interv$d_quarantine + 1
+    out$daily_cases[d] <- out$daily_cases[d] + sum(feeling_sick)
+    
+    if (interv$quarantine_contacts) {
+      contacts <- get_close_contacts(nodes, edges, which(feeling_sick))
+      nodes$q_start[contacts] <- d
+    }
     
     if (d %% interv$test_period == 1) {
       tp <- 
@@ -110,14 +113,22 @@ sim_agents <- function(nodes, edges, params, interv) {
         !nodes$quarantined & 
         nodes$compartment %in% c("S", "E") & 
         runif(nrow(nodes)) < 1 - params$test_spec
-
+      
       nodes$q_start[tp | fp] <- d + params$test_delay
-      nodes$q_end[tp | fp] <- d + interv$d_quarantine + 1
+      if (d < params$n_days) {
+        out$daily_cases[d + params$test_delay] <-
+        out$daily_cases[d + params$test_delay] + sum(tp | fp)
+      }
+      
+      if (interv$quarantine_contacts) {
+        contacts <- get_close_contacts(nodes, edges, which(tp | fp))
+        nodes$q_start[contacts] <- d + params$test_delay 
+      }
     }
     
-    out$daily_cases[d] <- sum(d == nodes$q_start)
+    
     nodes$quarantined[d == nodes$q_start] <- TRUE
-    nodes$quarantined[d == nodes$q_end] <- FALSE
+    nodes$quarantined[d == nodes$q_start + interv$d_quarantine] <- FALSE
     
     # S -> E this part is the actual transmission events, aka making S people into E
     if (d %% 7 %in% ((2:6 - params$start_day) %% 7) ) {
@@ -197,4 +208,21 @@ washington_data <- function() {
   case_data <- case_data * 4
   
   return(as.numeric(case_data))
+}
+
+get_close_contacts <- function(nodes, edges, ids) {
+  edges_q <- edges %>% 
+    filter(
+      type == "class"
+      & xor(to %in% ids, from %in% ids)
+    ) %>% 
+    mutate(
+      contacts = if_else(
+        to %in% ids,
+        from,
+        to
+      )
+    ) %>%
+    filter(!nodes$quarantined[contacts])
+  return(unique(edges_q$contacts))
 }
