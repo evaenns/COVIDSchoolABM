@@ -3,8 +3,8 @@ library(purrr)
 
 # setting up the simulation
 
-create_school_net <- function(n_students, n_lunches, n_classes, n_hours) {
-  
+create_school_net <- function(n_students, n_lunches, n_classes, n_hours, seed = Sys.time()) {
+  set.seed(seed)
   # giving the students hours
   nodes <- map_dfc(
     1:n_hours,

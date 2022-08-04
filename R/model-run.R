@@ -3,7 +3,9 @@ library(purrr)
 
 # params is the list of interventions, plus number of days and infection probability
 
-run_sims <- function(school_net, n_sims, params, interv, print_msgs = F) {
+run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), print_msgs = F) {
+  set.seed(seed)
+  
   # masks and vaccination
   nodes <- school_net$nodes
   
