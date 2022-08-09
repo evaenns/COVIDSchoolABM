@@ -1,9 +1,11 @@
 library(dplyr)
 library(purrr)
+library(doRNG)
+library(doParallel)
 
 # params is the list of interventions, plus number of days and infection probability
 
-run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), print_msgs = F) {
+run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), parallel = F, n_cores = 1) {
   set.seed(seed)
   
   # masks and vaccination
@@ -17,13 +19,25 @@ run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), prin
   
   edges <- school_net$edges
 
-  sim_results <- list()
-  
-  for (sim in 1:n_sims) {
-    sim_name <- paste0("simulation_", sim)
-    sim_results[[sim_name]] <- sim_agents(nodes, edges, params, interv)
+  if (parallel) {
+    cl <- makeCluster(n_cores)
+    registerDoParallel(cl)
+    print(cl)
     
-    if (print_msgs) print(paste0("Simulation #", sim))
+    sim_results <- foreach(
+      sim = 1:n_sims, 
+      .export = c("sim_agents", "washington_data"), 
+      .packages = "dplyr"
+    ) %dorng% {
+      sim_agents(nodes, edges, params, interv)
+    }
+  } else {
+    sim_results <- list()
+    
+    for (sim in 1:n_sims) {
+      sim_name <- paste0("simulation_", sim)
+      sim_results[[sim_name]] <- sim_agents(nodes, edges, params, interv)
+    }
   }
   
   return(sim_results)
