@@ -31,6 +31,8 @@ run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), para
     ) %dorng% {
       sim_agents(nodes, edges, params, interv)
     }
+    
+    stopCluster(cl)
   } else {
     sim_results <- list()
     
@@ -67,7 +69,7 @@ sim_agents <- function(nodes, edges, params, interv) {
   
   # community infection setup
   if (params$community_p_inf == "MN Washington County") {
-    community_pr <- washington_data()
+    community_pr <- washington_data("9/1/21", params)
   } else {
     community_pr <- rep(params$community_p_inf, params$n_days)
   }
@@ -209,16 +211,20 @@ sim_agents <- function(nodes, edges, params, interv) {
   return(out)
 }
 
-washington_data <- function() {
+washington_data <- function(start_date, params) {
   case_data <- readRDS("data/time_series_mn_washington.rds")
+  
+  a <- which(names(case_data) == start_date) + params$d_incubation
+  b <- a + params$n_days - 1
   
   # 7 day avg daily cases
   # 600 is september 1st
-  case_data <- (case_data[600:813]-case_data[593:806])/7
+  case_data <- case_data[(a + 3):(b + 3)] - case_data[(a - 4):(b - 4)]
+  case_data <- case_data / 7
   
   # proportion of washington population
   # 2020 census
-  case_data <- case_data/267568
+  case_data <- case_data / 267568
   
   # inflate due to underreporting
   case_data <- case_data * 4

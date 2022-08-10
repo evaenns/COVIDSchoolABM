@@ -8,7 +8,7 @@ erhs_net <- create_school_net(
   seed = 1659994788
 )
 
-source("R/model-run-parallel.R")
+source("R/model-run.R")
 
 params <- list(
   d_latent = 4, 
@@ -38,7 +38,8 @@ interv <- list(
 )
 
 print("start")
-for (rate in 0:15*0.0001) {
+for (rate in 0:15 * 0.0001) {
+  
   params$rate_inf <- rate
   
   sims <- run_sims(
@@ -46,8 +47,8 @@ for (rate in 0:15*0.0001) {
     500, 
     params, 
     interv, 
-    print_msgs = T,
     seed = 1659994788,
+    parallel = T,
     n_cores = 100
   )
   
