@@ -1,4 +1,4 @@
-source("R/model-setup.R")
+source("R/src-model-setup.R")
 
 erhs_net <- create_school_net(
   n_students = 1954,
@@ -8,7 +8,7 @@ erhs_net <- create_school_net(
   seed = 1659994788
 )
 
-source("R/model-run.R")
+source("R/src-model-run.R")
 
 params <- list(
   d_latent = 4, 
@@ -53,7 +53,7 @@ for (rate in 0:15 * 0.0001) {
   )
   
   filename = paste0(
-    "calibration/msi-calibration-20220808/2021T1-rate-",
+    "output/20220808/2021T1-rate-",
     substr(format(rate, scientific = F, nsmall = 4), 3, 6),
     ".rds"
   )

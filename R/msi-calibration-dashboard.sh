@@ -6,4 +6,4 @@
 #SBATCH --mail-user=chen8153@umn.edu
 
 module load R
-Rscript calibration/msi-calibration-20220808/msi-calibration-20220808.R
+Rscript R/msi-calibration-dashboard.R
