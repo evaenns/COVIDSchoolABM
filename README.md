@@ -17,7 +17,7 @@ How to use this:
       ...
     )
     interv <- list(
-    p_mask = 0.10,
+      p_mask = 0.10,
       ...
     )
     ```
@@ -34,7 +34,7 @@ How to use this:
     )
     ```
     
-5. `simulations` will be a list containing dataframe for each trial:
+5. `simulations` will be a list containing dataframes for each trial:
 
     ```R
     $simulation_1
