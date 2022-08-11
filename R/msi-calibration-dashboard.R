@@ -34,8 +34,10 @@ interv <- list(
   p_vax = 0.5,
   d_quarantine = 10,
   quarantine_contacts = F,
-  test_period = -1 #never
+  test_period = -1
 )
+
+# Finished setting up everything to model fall 2021 trimester w/ Delta variant
 
 print("start")
 for (rate in 0:15 * 0.0001) {

@@ -1,11 +1,19 @@
 library(dplyr)
 library(purrr)
 
-# setting up the simulation
+# This creates the school contact network and retuns a list of size 2 containing
+# the node and edge lists
+#
+# n_students: The number of students in school
+# n_lunches:  The number of lunch cohorts
+# n_classes:  The number of classes running at any given time.
+#             Students will be assigned to classes of roughly equal size
+# n_hours:    The number of classes any student will attend in the day
 
 create_school_net <- function(n_students, n_lunches, n_classes, n_hours, seed = Sys.time()) {
   set.seed(seed)
-  # giving the students hours
+  
+  # assigning students random classes for every hour
   nodes <- map_dfc(
     1:n_hours,
     function(x) sample(
@@ -15,13 +23,11 @@ create_school_net <- function(n_students, n_lunches, n_classes, n_hours, seed = 
   )
   colnames(nodes) <- paste0("hour_", 1:n_hours)
   
-  # putting the students into a lunch group
+  # assigning students a random lunch group
   nodes$lunch <- sample(
     rep(1:n_lunches, n_students/n_lunches + 1), 
     n_students
   )
-  
-  # finished nodes, now edges
   
   # edges between all students who share a class
   edges_class <- map_dfr(
@@ -36,7 +42,6 @@ create_school_net <- function(n_students, n_lunches, n_classes, n_hours, seed = 
   )
   colnames(edges_class) <- c("to", "from")
   edges_class$type <-  "class"
-  # edges_class$p_inf <- p_inf_class
   
   edges_lunch <- map_dfr(
     1:n_lunches,
@@ -47,7 +52,6 @@ create_school_net <- function(n_students, n_lunches, n_classes, n_hours, seed = 
   )
   colnames(edges_lunch) <- c("to", "from")
   edges_lunch$type <-  "lunch"
-  # edges_lunch$p_inf <- p_inf_lunch
   
   edges <- bind_rows(edges_class, edges_lunch)
   
