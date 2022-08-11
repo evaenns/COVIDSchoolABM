@@ -41,6 +41,8 @@ library(doParallel)
 run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), parallel = F, n_cores = 1) {
   set.seed(seed) 
   
+  nodes <- school_net$nodes
+  
   # randomly assign masks and vaccines, which will stay fixed for these trials
   nodes$mask <- F
   nodes$mask[sample(1:nrow(nodes), interv$p_mask * nrow(nodes))] <- T
