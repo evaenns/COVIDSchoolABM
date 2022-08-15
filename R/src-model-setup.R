@@ -10,7 +10,14 @@ library(purrr)
 #             Students will be assigned to classes of roughly equal size
 # n_hours:    The number of classes any student will attend in the day
 
-create_school_net <- function(n_students, n_lunches, n_classes, n_hours, seed = Sys.time()) {
+create_school_net <- function(
+    n_students,
+    n_lunches,
+    n_classes,
+    n_hours,
+    seed = Sys.time()
+  ) {
+    
   set.seed(seed)
   
   # assigning students random classes for every hour
@@ -23,11 +30,12 @@ create_school_net <- function(n_students, n_lunches, n_classes, n_hours, seed = 
   )
   colnames(nodes) <- paste0("hour_", 1:n_hours)
   
-  # assigning students a random lunch group
+  # assigning students a random lunch group based on their hour 1 class
+  # it's actually hour 3 (out of 6) - but doesn't matter since it's all random
   nodes$lunch <- sample(
-    rep(1:n_lunches, n_students/n_lunches + 1), 
-    n_students
-  )
+    rep(1:n_lunches, n_classes/n_lunches + 1), 
+    n_classes
+  )[nodes$hour_1]
   
   # edges between all students who share a class
   edges_class <- map_dfr(
