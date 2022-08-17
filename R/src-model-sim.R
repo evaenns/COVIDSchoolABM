@@ -60,7 +60,7 @@ run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), para
     
     sim_results <- foreach(
       sim = 1:n_sims, 
-      .export = c("sim_agents", "washington_data"), 
+      .export = c("sim_agents", "washington_data", "get_close_contacts"), 
       .packages = "dplyr"
     ) %dorng% {
       sim_agents(nodes, edges, params, interv)
@@ -119,6 +119,7 @@ sim_agents <- function(nodes, edges, params, interv) {
       inf_student <- sample(which(nodes$compartment == "S"), params$I_0)
       nodes$compartment[inf_student] <- "E"
       nodes$day_exposed[inf_student] <- d
+      nodes$d_contag[inf_student] <- params$get_d_contag(params$I_0)
     }
     
     # All timed stage transitions below ----------------------------------------
@@ -293,6 +294,7 @@ get_close_contacts <- function(nodes, edges, ids) {
         to
       )
     ) %>%
-    filter(!nodes$quarantined[contacts])
+    filter(!nodes$quarantined[contacts]) %>%
+    filter(!nodes$vax[contacts])
   return(unique(edges_q$contacts))
 }
