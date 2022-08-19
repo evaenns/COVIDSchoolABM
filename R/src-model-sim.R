@@ -87,15 +87,20 @@ run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), para
 # infections (that happened in school), and days of in-person school lost.
 
 sim_agents <- function(nodes, edges, params, interv) {
+  
+  if (params$d_incubation < params$latent) stop("Incubation period must be longer than latent period.")
 
   out <- tibble(
     S = rep(0, params$n_days),
     E = rep(0, params$n_days),
-    I = rep(0, params$n_days),
+    Ip = rep(0, params$n_days),
+    Is = rep(0, params$n_days),
+    Ia = rep(0, params$n_days),
     R = rep(0, params$n_days),
     daily_cases = rep(0, params$n_days),
     daily_infs = rep(0, params$n_days),
-    learning_lost = rep(0, params$n_days)
+    in_school_Is = rep(0, params$n_days),
+    out_of_school = rep(0, params$n_days)
   )
   
   # initialize each student to be healthy, non quarantined, etc.
@@ -165,7 +170,7 @@ sim_agents <- function(nodes, edges, params, interv) {
         runif(nrow(nodes)) < params$test_sens
       fp <- 
         !nodes$quarantined & 
-        nodes$compartment %in% c("S", "E") & 
+        nodes$compartment %in% c("S", "E", "R") & 
         runif(nrow(nodes)) < 1 - params$test_spec
       
       nodes$q_start[tp | fp] <- d + params$test_delay
@@ -239,7 +244,8 @@ sim_agents <- function(nodes, edges, params, interv) {
       nodes$d_contag[new_infs] <- params$get_d_contag(length(new_infs))
       out$daily_infs[d] <- length(new_infs)
       
-      out$learning_lost[d] <- sum(nodes$quarantined)
+      out$in_school_Is[d] <- sum(!nodes$quarantined & nodes$compartment == "Is")
+      out$out_of_school[d] <- sum(nodes$quarantined)
     } else {
       # Introduce outside infections if it's a weekend =========================
       susceptibles <- which(nodes$compartment == "S")
@@ -249,12 +255,13 @@ sim_agents <- function(nodes, edges, params, interv) {
       nodes$day_exposed[outside_infs] <- d
       nodes$d_contag[outside_infs] <- params$get_d_contag(length(outside_infs))
       
-      out$learning_lost[d] <- 0
+      out$in_school_Is[d] <- 0
+      out$out_of_school[d] <- 0
     }
     
     # Recording SEIR time series -----------------------------------------------
-    for (comp in c("S", "E", "I", "R")) {
-      out[d, comp] <- sum(substr(nodes$compartment, 1, 1) == comp)
+    for (comp in c("S", "E", "Ip", "Is", "Ia", "R")) {
+      out[d, comp] <- sum(nodes$compartment == comp)
     }
     
     
