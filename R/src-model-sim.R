@@ -9,7 +9,7 @@ library(doParallel)
 #
 # params is the list of parameters:
 #   d_latent:        Time from exposure to infectiousness (in days) 
-#   d_incubation     Time from exposure to symptoms (in days)
+#   d_incubation:    Time from exposure to symptoms (in days)
 #   d_immunity:      Length of immunity period after infection (in days)
 #   get_d_contag:    Length of infection after symptoms (in days)
 #                    A function that takes in one size argument
@@ -29,14 +29,16 @@ library(doParallel)
 #
 #   test_sens:       Test sensitivity (0-1)
 #   test_spec:       Test specificity (0-1)
-#   test_delay       Delay/turnaround time for test results (in days)
+#   test_delay:      Delay/turnaround time for test results (in days)
 #
 # interv is the list of interventions:
 #   p_mask:              The proportion of students that are masked
 #   p_vax:               The proportion of students that are vaccinated
 #   d_quarantine:        The length of isolation/quarantine (in days)
+#   d_mask_after:        The length of mask wearing after quarantine (in days)
 #   quarantine_contacts: Whether or not to quarantine close contacts (boolean)
-#   test_period          Time between tests (e.g. 7 for weekly)
+#   test_to_stay:        Whether unvaccinated close contacts will test (boolean)
+#   test_period:         Time between tests (e.g. 7 for weekly)
 
 run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), parallel = F, n_cores = 1) {
   set.seed(seed) 
@@ -143,7 +145,6 @@ sim_agents <- function(nodes, edges, params, interv) {
     
     # R -> S: Becoming susceptible again after recovery
     R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + params$latent + nodes$d_contag + params$d_immunity
-    nodes$q_start[R_to_S] <- Inf
     nodes$compartment[R_to_S] <- "S"
     
     # Entering and exiting quarantine ------------------------------------------
@@ -208,11 +209,18 @@ sim_agents <- function(nodes, edges, params, interv) {
             from,
             to
           ),
-          # Add modifiers 
-          true_rate_inf = params$rate_inf * 
-            (1 - params$eff_mask_S * nodes$mask[who_S] * (type != "lunch") ) *
-            (1 - params$eff_mask_I * nodes$mask[who_I] * (type != "lunch") ) *
-            (1 - params$eff_vax * nodes$vax[who_S]),
+          # Add modifiers
+          true_rate_inf = params$rate_inf * (
+            1 - params$eff_vax * nodes$vask[who_S]
+          ),
+          true_rate_inf = true_rate_inf * (
+            1 - params$eff_mask_S * (type != "lunch")
+            * (nodes$mask[who_S] | d < nodes$q_start[who_S] + interv$d_quarantine + interv$d_mask_after)
+          ),
+          true_rate_inf = true_rate_inf * (
+            1 - params$eff_mask_I * (type != "lunch")
+            * (nodes$mask[who_I] | d < nodes$q_start[who_I] + interv$d_quarantine + interv$d_mask_after)
+          ),
           # Convert rate to probability
           p_inf = 1 - exp(
             -true_rate_inf * case_when(
