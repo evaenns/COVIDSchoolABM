@@ -138,11 +138,11 @@ sim_agents <- function(nodes, edges, params, interv) {
     )
     
     # Is/Ia -> R: Making students recover from COVID-19
-    Isa_to_R <- nodes$compartment %in% c("Is", "Ia") & d >= nodes$day_exposed + params$d_incubation + nodes$d_contag
+    Isa_to_R <- nodes$compartment %in% c("Ip", "Is", "Ia") & d >= nodes$day_exposed + params$latent + nodes$d_contag
     nodes$compartment[Isa_to_R] <- "R"
     
     # R -> S: Becoming susceptible again after recovery
-    R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + params$d_incubation + nodes$d_contag + params$d_immunity
+    R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + params$latent + nodes$d_contag + params$d_immunity
     nodes$q_start[R_to_S] <- Inf
     nodes$compartment[R_to_S] <- "S"
     
