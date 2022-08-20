@@ -29,7 +29,6 @@ library(doParallel)
 #
 #   test_sens:       Test sensitivity (0-1)
 #   test_spec:       Test specificity (0-1)
-#   test_delay:      Delay/turnaround time for test results (in days)
 #
 # interv is the list of interventions:
 #   p_mask:              The proportion of students that are masked
@@ -41,6 +40,11 @@ library(doParallel)
 #   test_period:         Time between tests (e.g. 7 for weekly)
 
 run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), parallel = F, n_cores = 1) {
+  if (params$d_incubation < params$d_latent) stop("Incubation period must be longer than latent period.")
+  if (sum(interv$quarantine_contacts, interv$test_to_stay, interv$test_period != -1) > 1) warning(
+    "Are you sure you want more than one of the following interventions?\n - Quarantining close contacts\n - Test to stay\n - Periodic testing"
+  )
+  
   set.seed(seed) 
   
   nodes <- school_net$nodes
@@ -62,7 +66,7 @@ run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), para
     
     sim_results <- foreach(
       sim = 1:n_sims, 
-      .export = c("sim_agents", "washington_data", "get_close_contacts"), 
+      .export = c("sim_agents", "washington_data", "get_close_contacts", "do_tests"), 
       .packages = "dplyr"
     ) %dorng% {
       sim_agents(nodes, edges, params, interv)
@@ -87,8 +91,6 @@ run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), para
 # infections (that happened in school), and days of in-person school lost.
 
 sim_agents <- function(nodes, edges, params, interv) {
-  
-  if (params$d_incubation < params$latent) stop("Incubation period must be longer than latent period.")
 
   out <- tibble(
     S = rep(0, params$n_days),
@@ -100,17 +102,22 @@ sim_agents <- function(nodes, edges, params, interv) {
     daily_cases = rep(0, params$n_days),
     daily_infs = rep(0, params$n_days),
     in_school_Is = rep(0, params$n_days),
-    out_of_school = rep(0, params$n_days)
+    out_of_school = rep(0, params$n_days),
+    tests_used = rep(0, params$n_days)
   )
   
   # initialize each student to be healthy, non quarantined, etc.
   nodes <- nodes %>% mutate(
     compartment = "S",
     quarantined = F,
-    day_exposed = Inf,
-    q_start = Inf,
+    confirmed = F,
+    day_exposed = -Inf,
+    symptoms_start = -Inf,
+    tts_start = -Inf,
+    q_start = -Inf,
     d_contag = 0
   )
+  school_tests <- integer(0)
   
   # community infection setup
   if (params$community_p_inf == "MN Washington County") {
@@ -143,50 +150,58 @@ sim_agents <- function(nodes, edges, params, interv) {
       "Ia",
       "Is"
     )
+    nodes$symptoms_start[Ip_to_Isa & nodes$compartment == "Is"] <- d
     
     # Is/Ia -> R: Making students recover from COVID-19
-    Isa_to_R <- nodes$compartment %in% c("Ip", "Is", "Ia") & d >= nodes$day_exposed + params$latent + nodes$d_contag
+    Isa_to_R <- nodes$compartment %in% c("Ip", "Is", "Ia") & d >= nodes$day_exposed + params$d_latent + nodes$d_contag
     nodes$compartment[Isa_to_R] <- "R"
     
     # R -> S: Becoming susceptible again after recovery
-    R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + params$latent + nodes$d_contag + params$d_immunity
+    R_to_S <- nodes$compartment == "R" & d >= nodes$day_exposed + params$d_latent + nodes$d_contag + params$d_immunity
     nodes$compartment[R_to_S] <- "S"
     
-    # Entering and exiting quarantine ------------------------------------------
-    feeling_sick <- !nodes$quarantined & nodes$compartment == "Is" & d < nodes$q_start
-    nodes$q_start[feeling_sick] <- d
-    out$daily_cases[d] <- out$daily_cases[d] + sum(feeling_sick)
+    # All testing and quarantining interventions -------------------------------
     
-    if (interv$quarantine_contacts) {
-      contacts <- get_close_contacts(nodes, edges, which(feeling_sick))
-      nodes$q_start[contacts] <- d
-    }
-    
-    # Testing students
+    # People testing after they have symptoms (2 spaced 48 hrs apart, FDA)
+    nodes$q_start[d == nodes$symptoms_start] <- d
+    home_tests <- which(
+      nodes$symptoms_start %in% c(d, d - 2)
+      & !nodes$confirmed
+    )
+    home_cases <- do_tests(nodes, params, home_tests)
+    nodes$confirmed[home_cases] <- T
+  
+    # School mandated tests - TTS or periodic testing
     if (d %% interv$test_period == 1) {
-      tp <- 
-        !nodes$quarantined & 
-        nodes$compartment %in% c("Ip", "Is", "Ia") & 
-        runif(nrow(nodes)) < params$test_sens
-      fp <- 
-        !nodes$quarantined & 
-        nodes$compartment %in% c("S", "E", "R") & 
-        runif(nrow(nodes)) < 1 - params$test_spec
-      
-      nodes$q_start[tp | fp] <- d + params$test_delay
-      if (d < params$n_days) {
-        out$daily_cases[d + params$test_delay] <-
-        out$daily_cases[d + params$test_delay] + sum(tp | fp)
-      }
-      
-      if (interv$quarantine_contacts) {
-        contacts <- get_close_contacts(nodes, edges, which(tp | fp))
-        nodes$q_start[contacts] <- d + params$test_delay 
-      }
+      school_tests <- which(!nodes_quarantined)
+    }
+    if (interv$test_to_stay) {
+      school_tests <- which(nodes$tts_start %in% c(d, d - 2, d - 4))
+    }
+    school_tests <- 
+      school_tests[!nodes$quarantined[school_tests] & d != nodes$symptoms_start[school_tests]]
+    school_cases <- do_tests(nodes, params, school_tests)
+    nodes$confirmed[school_cases] <- T
+    nodes$q_start[school_cases] <- d 
+    
+    # Handling stuff for all positive cases (both @home and @school)
+    cases <- union(home_cases, school_cases)
+    contacts <- get_close_contacts(nodes, edges, cases)
+    if (interv$quarantine_contacts) {
+      nodes$q_start[contacts] <- d + 1
+    }
+    if (interv$test_to_stay) {
+      nodes$tts_start[contacts] <- d + 1
     }
     
+    # Entering and exiting quarantine
     nodes$quarantined[d == nodes$q_start] <- TRUE
     nodes$quarantined[d == nodes$q_start + interv$d_quarantine] <- FALSE
+    nodes$confirmed[d == nodes$q_start + interv$d_quarantine] <- F
+    
+    # Logging
+    out$daily_cases[d] <- length(cases)
+    out$tests_used[d] <- length(union(home_tests, school_tests))
     
     # S -> E this part is the actual transmission ------------------------------
     if (d %% 7 %in% ((2:6 - params$start_day) %% 7) ) {
@@ -216,8 +231,9 @@ sim_agents <- function(nodes, edges, params, interv) {
           ),
           # Add modifiers
           true_rate_inf = params$rate_inf * (
-            1 - params$eff_vax * nodes$vask[who_S]
+            1 - params$eff_vax * nodes$vax[who_S]
           ),
+
           true_rate_inf = true_rate_inf * (
             1 - params$eff_mask_S * (type != "lunch")
             * (nodes$mask[who_S] | d < nodes$q_start[who_S] + interv$d_quarantine + interv$d_mask_after)
@@ -309,7 +325,17 @@ get_close_contacts <- function(nodes, edges, ids) {
         to
       )
     ) %>%
-    filter(!nodes$quarantined[contacts]) %>%
-    filter(!nodes$vax[contacts])
+    filter(!nodes$quarantined[contacts])
   return(unique(edges_q$contacts))
+}
+
+do_tests <- function(nodes, params, ids) {
+  tp <- 
+    nodes$compartment[ids] %in% c("Ip", "Is", "Ia") & 
+    runif(length(ids)) < params$test_sens
+  fp <- 
+    nodes$compartment[ids] %in% c("S", "E", "R") & 
+    runif(length(ids)) < 1 - params$test_spec
+  
+  return(ids[tp | fp])
 }
