@@ -173,7 +173,7 @@ sim_agents <- function(nodes, edges, params, interv) {
   
     # School mandated tests - TTS or periodic testing
     if (d %% interv$test_period == 1) {
-      school_tests <- which(!nodes_quarantined)
+      school_tests <- 1:nrow(nodes)
     }
     if (interv$test_to_stay) {
       school_tests <- which(nodes$tts_start %in% c(d, d - 2, d - 4))
