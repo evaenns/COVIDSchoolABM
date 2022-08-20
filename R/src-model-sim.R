@@ -117,7 +117,6 @@ sim_agents <- function(nodes, edges, params, interv) {
     q_start = -Inf,
     d_contag = 0
   )
-  school_tests <- integer(0)
   
   # community infection setup
   if (params$community_p_inf == "MN Washington County") {
@@ -172,6 +171,7 @@ sim_agents <- function(nodes, edges, params, interv) {
     nodes$confirmed[home_cases] <- T
   
     # School mandated tests - TTS or periodic testing
+    school_tests <- integer(0)
     if (d %% interv$test_period == 1) {
       school_tests <- 1:nrow(nodes)
     }
