@@ -9,12 +9,15 @@ erhs_net <- create_school_net(
 )
 
 source("R/src-model-sim.R")
+pmf <- readRDS("data/culture-conversion-pmf.rds")
 
 params <- list(
   d_latent = 4, 
   d_incubation = 6,
   d_immunity = 365,
-  get_d_contag = function(n) {rgamma(n, shape = 4, rate = 0.75)},
+  get_d_contag = function(n) {
+    sample(1:nrow(pmf), n, prob = pmf$delta, replace = T)
+  },
   p_asymp = 0.405, 
   
   n_days = 79,
