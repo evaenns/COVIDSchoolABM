@@ -28,7 +28,10 @@ params <- list(
   
   eff_mask_S = 0.5,
   eff_mask_I = 0.75,
-  eff_vax = 0.8
+  eff_vax = 0.8,
+  
+  test_sens = 0.63,
+  test_spec = 0.998
 )
 
 interv <- list(
