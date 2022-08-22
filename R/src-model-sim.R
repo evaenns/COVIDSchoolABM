@@ -66,7 +66,12 @@ run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), para
     
     sim_results <- foreach(
       sim = 1:n_sims, 
-      .export = c("sim_agents", "washington_data", "get_close_contacts", "do_tests"), 
+      .export = c(
+        "sim_agents",
+        "washington_data",
+        "get_close_contacts",
+        "do_tests"
+      ), 
       .packages = "dplyr"
     ) %dorng% {
       sim_agents(nodes, edges, params, interv)

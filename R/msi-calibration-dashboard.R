@@ -9,14 +9,13 @@ erhs_net <- create_school_net(
 )
 
 source("R/src-model-sim.R")
-pmf <- readRDS("data/culture-conversion-pmf.rds")
 
 params <- list(
   d_latent = 4, 
   d_incubation = 6,
   d_immunity = 365,
   get_d_contag = function(n) {
-    sample(1:nrow(pmf), n, prob = pmf$delta, replace = T)
+    sample(1:15, n, prob = c(0, 0, 0.0620, 0.1887, 0.4066, 0.1242, 0.0316, 0.0923, 0, 0.0317, 0, 0.0629, 0, 0, 0), replace = T)
   },
   p_asymp = 0.405, 
   
@@ -36,7 +35,9 @@ interv <- list(
   p_mask = 0.25,
   p_vax = 0.5,
   d_quarantine = 10,
+  d_mask_after = 0,
   quarantine_contacts = F,
+  test_to_stay = F,
   test_period = -1
 )
 
@@ -58,7 +59,7 @@ for (rate in 0:15 * 0.0001) {
   )
   
   filename = paste0(
-    "output/20220808/2021T1-rate-",
+    "output/20220821/2021T1-rate-",
     substr(format(rate, scientific = F, nsmall = 4), 3, 6),
     ".rds"
   )
