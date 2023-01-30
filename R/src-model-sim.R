@@ -38,6 +38,7 @@ library(doParallel)
 #   quarantine_contacts: Whether or not to quarantine close contacts (boolean)
 #   test_to_stay:        Whether unvaccinated close contacts will test (boolean)
 #   test_period:         Time between tests (e.g. 7 for weekly)
+#   adherence:           Proportion of students that adhere to quarantine/testing (0-1)
 
 run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), parallel = F, n_cores = 1) {
   if (params$d_incubation < params$d_latent) stop("Incubation period must be longer than latent period.")
@@ -55,6 +56,19 @@ run_sims <- function(school_net, n_sims, params, interv, seed = Sys.time(), para
   
   nodes$vax <- F
   nodes$vax[sample(1:nrow(nodes), interv$p_vax * nrow(nodes))] <- T
+  
+  # randomly assign adherence
+  
+  if (is.null(interv$adherence)) {
+    nodes$adhere <- T
+  } else if (interv$adherence == 1) {
+    nodes$adhere <- T
+  } else {
+    nodes$adhere <- F
+    nodes$adhere[sample(1:nrow(nodes), interv$adherence * nrow(nodes))] <- T
+  }
+  
+  # edges
   
   edges <- school_net$edges
 
@@ -178,10 +192,10 @@ sim_agents <- function(nodes, edges, params, interv) {
     # School mandated tests - TTS or periodic testing
     school_tests <- integer(0)
     if (d %% interv$test_period == 1) {
-      school_tests <- 1:nrow(nodes)
+      school_tests <- which(nodes$adhere)
     }
     if (interv$test_to_stay) {
-      school_tests <- which(nodes$tts_start %in% c(d, d - 2, d - 4))
+      school_tests <- which(nodes$tts_start %in% c(d, d - 2, d - 4) & nodes$adhere)
     }
     school_tests <- 
       school_tests[!nodes$quarantined[school_tests] & d != nodes$symptoms_start[school_tests]]
@@ -200,7 +214,7 @@ sim_agents <- function(nodes, edges, params, interv) {
     }
     
     # Entering and exiting quarantine
-    nodes$quarantined[d == nodes$q_start] <- TRUE
+    nodes$quarantined[d == nodes$q_start & nodes$adhere] <- TRUE
     nodes$quarantined[d == nodes$q_start + interv$d_quarantine] <- FALSE
     nodes$confirmed[d == nodes$q_start + interv$d_quarantine] <- F
     
