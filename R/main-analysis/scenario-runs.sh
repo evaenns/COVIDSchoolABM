@@ -6,4 +6,4 @@
 #SBATCH --mail-user=chen8153@umn.edu
 
 module load R
-Rscript R/scenario-runs.R
+Rscript R/main-analysis/scenario-runs.R

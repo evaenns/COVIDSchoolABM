@@ -1,4 +1,4 @@
-source("R/src-model-setup.R")
+source("R/src/model-setup.R")
 
 erhs_net <- create_school_net(
   n_students = 1954,
@@ -8,7 +8,7 @@ erhs_net <- create_school_net(
   seed = 1659994788
 )
 
-source("R/src-model-sim.R")
+source("R/src/model-sim.R")
 
 params <- list(
   d_latent = 1, 
